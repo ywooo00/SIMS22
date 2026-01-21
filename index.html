@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>팝업 관리</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    /* 커스텀 스크롤바 */
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="bg-gray-50">
+  <div class="h-screen flex flex-col">
+    <!-- 헤더 -->
+    <div class="bg-white border-b border-gray-200 px-6 py-4 shrink-0">
+      <div class="flex items-center justify-between">
+        <h1 class="text-xl font-bold text-gray-900">팝업 관리</h1>
+        <div class="text-sm text-gray-500">
+          HOME &gt; 관리자 &gt; 팝업관리
+        </div>
+      </div>
+    </div>
+
+    <!-- 검색 조건 -->
+    <div class="bg-white border-b border-gray-200 px-6 py-4 shrink-0">
+      <div class="bg-gray-50 rounded-lg border border-gray-200 p-4">
+        <div class="flex items-center gap-3">
+          <select
+            id="search-type"
+            class="border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="title">제목</option>
+            <option value="registrar">등록자</option>
+            <option value="content">내용</option>
+          </select>
+          <div class="flex-1 relative">
+            <input
+              type="text"
+              id="search-keyword"
+              placeholder="검색어를 입력하세요"
+              class="w-full border border-gray-300 rounded px-3 py-2 pl-9 text-sm focus:ring-2 focus:ring-blue-500"
+              oninput="applyFilters()"
+            />
+            <svg class="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <button
+            onclick="applyFilters()"
+            class="px-4 py-2 bg-blue-500 text-white rounded text-sm font-medium hover:bg-blue-600"
+          >
+            조회
+          </button>
+          <button
+            onclick="resetSearch()"
+            class="flex items-center gap-1 px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-100"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            초기화
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 메인 컨텐츠 -->
+    <div class="flex flex-1 overflow-hidden">
+      <!-- 왼쪽: 팝업 목록 -->
+      <div id="list-panel" class="w-full bg-white flex flex-col h-full transition-all">
+        <!-- 목록 헤더 -->
+        <div class="px-6 py-3 border-b border-gray-200 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-4">
+            <h2 class="font-semibold text-gray-800 flex items-center gap-2">
+              <span class="w-2 h-2 bg-blue-500 rounded-full"></span>
+              팝업 목록
+            </h2>
+            <span class="text-sm text-gray-500">총 <span id="total-count">9</span>건</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              onclick="deleteSelected()"
+              id="delete-btn"
+              class="px-3 py-1.5 border border-gray-300 text-gray-400 rounded text-xs font-medium"
+            >
+              삭제 (<span id="selected-count">0</span>)
+            </button>
+            <button
+              onclick="openDetailPanel(null)"
+              class="px-3 py-1.5 bg-blue-500 text-white rounded text-xs font-medium hover:bg-blue-600"
+            >
+              + 신규등록
+            </button>
+          </div>
+        </div>
+
+        <!-- 테이블 -->
+        <div class="flex-1 overflow-y-auto custom-scrollbar">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 sticky top-0">
+              <tr>
+                <th class="w-10 py-3 px-3 border-b border-gray-200">
+                  <input
+                    type="checkbox"
+                    id="select-all"
+                    onchange="toggleSelectAll()"
+                    class="w-4 h-4 rounded"
+                  />
+                </th>
+                <th class="w-16 py-3 px-3 text-center text-gray-600 border-b">No.</th>
+                <th class="py-3 px-3 text-left text-gray-600 border-b">제목</th>
+                <th class="py-3 px-3 text-center text-gray-600 border-b w-32">등록일</th>
+                <th class="py-3 px-3 text-center text-gray-600 border-b w-24">등록자</th>
+                <th class="py-3 px-3 text-center text-gray-600 border-b w-20">첨부</th>
+                <th class="py-3 px-3 text-center text-gray-600 border-b w-20">조회</th>
+              </tr>
+            </thead>
+            <tbody id="popup-tbody">
+              <!-- 동적으로 생성됨 -->
+            </tbody>
+          </table>
+
+          <!-- 빈 상태 -->
+          <div id="empty-state" class="hidden flex items-center justify-center h-40 text-gray-400">
+            <div class="text-center">
+              <svg class="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              <p class="text-sm">등록된 팝업이 없습니다</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 페이지네이션 -->
+        <div class="px-6 py-3 border-t border-gray-200 flex items-center justify-between bg-gray-50 shrink-0">
+          <span class="text-xs text-gray-500" id="pagination-info">1-9 / 9건</span>
+          <div class="flex items-center gap-1" id="pagination-buttons">
+            <!-- 동적으로 생성됨 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 오른쪽: 상세/편집 패널 -->
+      <div id="detail-panel" class="hidden w-[40%] bg-gray-50 border-l border-gray-200 flex flex-col h-full">
+        <!-- 패널 헤더 -->
+        <div class="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
+          <div>
+            <h2 class="font-bold text-gray-800" id="detail-title">팝업 정보</h2>
+            <p class="text-sm text-gray-500" id="detail-subtitle"></p>
+          </div>
+          <button
+            onclick="closeDetailPanel()"
+            class="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center text-gray-400"
+          >
+            ✕
+          </button>
+        </div>
+
+        <!-- 패널 바디 -->
+        <div class="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+          <!-- 기본 정보 -->
+          <div class="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <span class="w-1 h-4 bg-blue-500 rounded"></span>
+              기본 정보
+            </h3>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">제목 <span class="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  id="detail-title-input"
+                  placeholder="팝업 제목을 입력하세요"
+                  class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">등록자</label>
+                  <input
+                    type="text"
+                    id="detail-registrar"
+                    readonly
+                    class="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-gray-50"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs text-gray-500 mb-1">등록일</label>
+                  <input
+                    type="text"
+                    id="detail-date"
+                    readonly
+                    class="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-gray-50"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 노출 설정 -->
+          <div class="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <span class="w-1 h-4 bg-green-500 rounded"></span>
+              노출 설정
+            </h3>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs text-gray-500 mb-1">노출기간</label>
+                <div class="flex items-center gap-2">
+                  <input
+                    type="date"
+                    id="detail-start-date"
+                    class="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                  />
+                  <span class="text-gray-400">~</span>
+                  <input
+                    type="date"
+                    id="detail-end-date"
+                    class="flex-1 border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 내용 -->
+          <div class="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <span class="w-1 h-4 bg-purple-500 rounded"></span>
+              내용 <span class="text-red-500">*</span>
+            </h3>
+            <textarea
+              id="detail-content"
+              placeholder="팝업 내용을 입력하세요"
+              rows="8"
+              class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
+            ></textarea>
+          </div>
+
+          <!-- 첨부파일 -->
+          <div class="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <span class="w-1 h-4 bg-orange-500 rounded"></span>
+              첨부파일
+            </h3>
+            <div class="space-y-3">
+              <div id="file-list" class="space-y-2">
+                <!-- 동적으로 생성됨 -->
+              </div>
+              <label class="block">
+                <span class="inline-flex items-center px-4 py-2 bg-blue-500 text-white rounded text-sm font-medium hover:bg-blue-600 cursor-pointer">
+                  파일 추가
+                  <input type="file" class="hidden" onchange="handleFileSelect(event)" multiple />
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <!-- 사이트 선택 -->
+          <div class="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 class="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+              <span class="w-1 h-4 bg-pink-500 rounded"></span>
+              적용 사이트 <span class="text-red-500">*</span>
+            </h3>
+            <div class="grid grid-cols-3 gap-2" id="site-checkboxes">
+              <!-- 동적으로 생성됨 -->
+            </div>
+          </div>
+        </div>
+
+        <!-- 패널 푸터 -->
+        <div class="bg-white border-t border-gray-200 px-6 py-4 flex items-center justify-between shrink-0">
+          <button
+            id="detail-delete-btn"
+            onclick="deleteCurrentPopup()"
+            class="hidden px-4 py-2 border border-red-500 text-red-500 rounded text-sm font-medium hover:bg-red-50"
+          >
+            삭제
+          </button>
+          <div id="detail-delete-placeholder"></div>
+          <div class="flex gap-2">
+            <button
+              onclick="closeDetailPanel()"
+              class="px-4 py-2 border border-gray-300 text-gray-700 rounded text-sm font-medium hover:bg-gray-50"
+            >
+              취소
+            </button>
+            <button
+              id="detail-save-btn"
+              onclick="savePopup()"
+              class="px-6 py-2 bg-blue-500 text-white rounded text-sm font-medium hover:bg-blue-600"
+            >
+              등록
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 데이터
+    const sites = ['전체', 'TG', 'TG&Co', 'EPSON', 'FUJI XEROX', 'Amway', 'Huawei', 'ZTE', 'Lenovo', 'EZVIZ', 'LOGITECH', '이마트'];
+
+    const popups = [
+      { 
+        id: 10, 
+        title: '2023 lenovo MSD 매뉴얼(최신버전)', 
+        registrar: '김은화', 
+        date: '2023-04-21',
+        datetime: '2023-04-21 17:21:27',
+        startDate: '2023-04-21',
+        endDate: '2023-12-31',
+        content: '2023 lenovo MSD 매뉴얼\n-MSD Case 및 WO 검수시 신규 업데이트 된 부분 모두 적용',
+        attachments: ['lenovo_msd_2023.pdf'],
+        sites: ['전체'],
+        views: 19
+      },
+      { 
+        id: 9, 
+        title: 'LENOVO DEPOT WORK ORDER 전산 업데이트 매뉴얼', 
+        registrar: '김은화', 
+        date: '2023-03-20',
+        datetime: '2023-03-20 14:15:30',
+        startDate: '2023-03-20',
+        endDate: '2023-12-31',
+        content: 'LENOVO DEPOT WORK ORDER 전산 시스템 업데이트 내역 및 사용 가이드',
+        attachments: [],
+        sites: ['TG', 'Lenovo'],
+        views: 7
+      },
+      { 
+        id: 8, 
+        title: 'ADP CRM 등록방법', 
+        registrar: '최두현', 
+        date: '2019-05-15',
+        datetime: '2019-05-15 09:30:00',
+        startDate: '2019-05-15',
+        endDate: '2024-12-31',
+        content: 'ADP CRM 시스템 등록 절차 및 주의사항 안내',
+        attachments: ['adp_crm_guide.pdf'],
+        sites: ['전체'],
+        views: 25
+      },
+      { 
+        id: 7, 
+        title: 'LENOVO 내근 추가패턴 매뉴얼', 
+        registrar: '최두현', 
+        date: '2019-05-15',
+        datetime: '2019-05-15 11:20:00',
+        startDate: '2019-05-15',
+        endDate: '2024-12-31',
+        content: 'LENOVO 내근 직원을 위한 추가 패턴 업무 처리 매뉴얼',
+        attachments: [],
+        sites: ['TG', 'Lenovo'],
+        views: 22
+      },
+      { 
+        id: 6, 
+        title: 'lenovo (외근) CCI 1.5에서 ONS CLOSE 방법-한글버전', 
+        registrar: '최두현', 
+        date: '2019-05-15',
+        datetime: '2019-05-15 13:45:00',
+        startDate: '2019-05-15',
+        endDate: '2024-12-31',
+        content: 'lenovo 외근 엔지니어 CCI 1.5 시스템에서 ONS CLOSE 처리 방법',
+        attachments: ['cci_ons_close_kr.pdf'],
+        sites: ['Lenovo'],
+        views: 13
+      },
+      { 
+        id: 5, 
+        title: 'LENOVO 내근 DOA 신청 매뉴얼', 
+        registrar: '최두현', 
+        date: '2019-05-15',
+        datetime: '2019-05-15 15:10:00',
+        startDate: '2019-05-15',
+        endDate: '2024-12-31',
+        content: 'LENOVO 내근 직원의 DOA(Dead On Arrival) 신청 프로세스',
+        attachments: [],
+        sites: ['TG', 'Lenovo'],
+        views: 20
+      },
+      { 
+        id: 4, 
+        title: 'LENOVO 내근 DOA CLOSE 및 파트 반납 매뉴얼', 
+        registrar: '최두현', 
+        date: '2019-05-15',
+        datetime: '2019-05-15 16:30:00',
+        startDate: '2019-05-15',
+        endDate: '2024-12-31',
+        content: 'LENOVO DOA CLOSE 처리 및 파트 반납 절차 안내',
+        attachments: ['doa_close_manual.pdf'],
+        sites: ['Lenovo'],
+        views: 9
+      },
+      { 
+        id: 3, 
+        title: '접점 후 무상배송 유상으로 변경되어 전산 Cancel시 선택방법', 
+        registrar: '최두현', 
+        date: '2019-05-15',
+        datetime: '2019-05-15 10:00:00',
+        startDate: '2019-05-15',
+        endDate: '2024-12-31',
+        content: '무상배송에서 유상으로 변경 시 전산 처리 방법 및 Cancel 절차',
+        attachments: [],
+        sites: ['전체'],
+        views: 126
+      },
+      { 
+        id: 2, 
+        title: 'Lenovo 업주배뉴얼_CRM(문환설명)', 
+        registrar: '최두현', 
+        date: '2019-05-15',
+        datetime: '2019-05-15 08:45:00',
+        startDate: '2019-05-15',
+        endDate: '2024-12-31',
+        content: 'Lenovo CRM 시스템 업주 업무 처리 매뉴얼 (문환 상세 설명 포함)',
+        attachments: ['lenovo_crm_owner.pdf', 'supplement.pdf'],
+        sites: ['TG', 'Lenovo'],
+        views: 151
+      }
+    ];
+
+    // 상태
+    let currentPage = 1;
+    const ITEMS_PER_PAGE = 10;
+    let selectedRows = [];
+    let currentPopup = null;
+    let selectedFiles = [];
+    let isViewMode = false; // 조회 모드 여부
+
+    // 초기화
+    function init() {
+      renderSiteCheckboxes();
+      applyFilters();
+    }
+
+    // 사이트 체크박스 렌더링
+    function renderSiteCheckboxes() {
+      const container = document.getElementById('site-checkboxes');
+      container.innerHTML = sites.map(site => `
+        <label class="flex items-center gap-2 px-3 py-2 rounded text-sm cursor-pointer transition-all hover:bg-gray-50 border border-gray-200">
+          <input
+            type="checkbox"
+            value="${site}"
+            onchange="toggleSite('${site}')"
+            class="w-4 h-4 rounded"
+          />
+          <span>${site}</span>
+        </label>
+      `).join('');
+    }
+
+    // 사이트 토글
+    function toggleSite(site) {
+      // 전체 선택 시 다른 것들 해제 또는 역으로
+      const checkboxes = document.querySelectorAll('#site-checkboxes input[type="checkbox"]');
+      if (site === '전체') {
+        const allCheckbox = Array.from(checkboxes).find(cb => cb.value === '전체');
+        if (allCheckbox.checked) {
+          checkboxes.forEach(cb => {
+            if (cb.value !== '전체') cb.checked = false;
+          });
+        }
+      } else {
+        const allCheckbox = Array.from(checkboxes).find(cb => cb.value === '전체');
+        if (allCheckbox) allCheckbox.checked = false;
+      }
+    }
+
+    // 필터 적용
+    function applyFilters() {
+      const searchType = document.getElementById('search-type').value;
+      const keyword = document.getElementById('search-keyword').value.toLowerCase();
+      
+      let filtered = popups.filter(p => {
+        if (!keyword) return true;
+        
+        if (searchType === 'title') {
+          return p.title.toLowerCase().includes(keyword);
+        } else if (searchType === 'registrar') {
+          return p.registrar.toLowerCase().includes(keyword);
+        } else if (searchType === 'content') {
+          return p.content.toLowerCase().includes(keyword);
+        }
+        return true;
+      });
+      
+      currentPage = 1;
+      renderTable(filtered);
+      renderPagination(filtered);
+      updateTotalCount(filtered.length);
+    }
+
+    // 테이블 렌더링
+    function renderTable(filteredPopups) {
+      const tbody = document.getElementById('popup-tbody');
+      const emptyState = document.getElementById('empty-state');
+      
+      const totalPages = Math.ceil(filteredPopups.length / ITEMS_PER_PAGE);
+      const startIdx = (currentPage - 1) * ITEMS_PER_PAGE;
+      const endIdx = startIdx + ITEMS_PER_PAGE;
+      const pagePopups = filteredPopups.slice(startIdx, endIdx);
+      
+      if (pagePopups.length === 0) {
+        tbody.innerHTML = '';
+        emptyState.classList.remove('hidden');
+        return;
+      }
+      
+      emptyState.classList.add('hidden');
+      
+      tbody.innerHTML = pagePopups.map(popup => `
+        <tr
+          onclick="selectPopup(${popup.id})"
+          class="border-b border-gray-100 cursor-pointer transition-colors ${
+            currentPopup?.id === popup.id ? 'bg-blue-50' : 'hover:bg-gray-50'
+          }"
+        >
+          <td class="py-3 px-3 text-center" onclick="event.stopPropagation()">
+            <input
+              type="checkbox"
+              ${selectedRows.includes(popup.id) ? 'checked' : ''}
+              onchange="toggleRow(${popup.id})"
+              class="w-4 h-4 rounded"
+            />
+          </td>
+          <td class="py-3 px-3 text-center text-gray-600 font-medium">${popup.id}</td>
+          <td class="py-3 px-3">
+            <p class="font-medium ${currentPopup?.id === popup.id ? 'text-blue-700' : 'text-gray-800'}">
+              ${popup.title}
+            </p>
+          </td>
+          <td class="py-3 px-3 text-center text-gray-600 text-xs">${popup.date}</td>
+          <td class="py-3 px-3 text-center text-gray-600 text-sm">${popup.registrar}</td>
+          <td class="py-3 px-3 text-center">
+            ${popup.attachments.length > 0 ? `
+              <span class="inline-flex items-center justify-center w-6 h-6 bg-yellow-100 text-yellow-600 rounded">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clip-rule="evenodd" />
+                </svg>
+              </span>
+            ` : '-'}
+          </td>
+          <td class="py-3 px-3 text-center text-gray-600 text-sm">${popup.views}</td>
+        </tr>
+      `).join('');
+      
+      updateSelectAllCheckbox(pagePopups);
+    }
+
+    // 페이지네이션 렌더링
+    function renderPagination(filteredPopups) {
+      const totalPages = Math.ceil(filteredPopups.length / ITEMS_PER_PAGE);
+      
+      const startIdx = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+      const endIdx = Math.min(currentPage * ITEMS_PER_PAGE, filteredPopups.length);
+      
+      document.getElementById('pagination-info').textContent = 
+        filteredPopups.length > 0 ? `${startIdx}-${endIdx} / ${filteredPopups.length}건` : '0건';
+      
+      if (totalPages <= 1) {
+        document.getElementById('pagination-buttons').innerHTML = '<div></div>';
+        return;
+      }
+      
+      const maxVisible = 5;
+      let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+      let end = Math.min(totalPages, start + maxVisible - 1);
+      
+      if (end - start + 1 < maxVisible) {
+        start = Math.max(1, end - maxVisible + 1);
+      }
+      
+      let pages = [];
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+      
+      const buttonsHtml = `
+        <button
+          onclick="goToPage(1)"
+          ${currentPage === 1 ? 'disabled' : ''}
+          class="px-2 py-1 text-xs rounded ${currentPage === 1 ? 'text-gray-300' : 'text-gray-600 hover:bg-gray-100'}"
+        >«</button>
+        <button
+          onclick="goToPage(${Math.max(1, currentPage - 1)})"
+          ${currentPage === 1 ? 'disabled' : ''}
+          class="px-2 py-1 text-xs rounded ${currentPage === 1 ? 'text-gray-300' : 'text-gray-600 hover:bg-gray-100'}"
+        >‹</button>
+        ${pages.map(p => `
+          <button
+            onclick="goToPage(${p})"
+            class="px-2.5 py-1 text-xs rounded ${p === currentPage ? 'bg-blue-500 text-white' : 'text-gray-600 hover:bg-gray-100'}"
+          >${p}</button>
+        `).join('')}
+        <button
+          onclick="goToPage(${Math.min(totalPages, currentPage + 1)})"
+          ${currentPage === totalPages ? 'disabled' : ''}
+          class="px-2 py-1 text-xs rounded ${currentPage === totalPages ? 'text-gray-300' : 'text-gray-600 hover:bg-gray-100'}"
+        >›</button>
+        <button
+          onclick="goToPage(${totalPages})"
+          ${currentPage === totalPages ? 'disabled' : ''}
+          class="px-2 py-1 text-xs rounded ${currentPage === totalPages ? 'text-gray-300' : 'text-gray-600 hover:bg-gray-100'}"
+        >»</button>
+      `;
+      
+      document.getElementById('pagination-buttons').innerHTML = buttonsHtml;
+    }
+
+    // 페이지 이동
+    function goToPage(page) {
+      currentPage = page;
+      applyFilters();
+    }
+
+    // 총 개수 업데이트
+    function updateTotalCount(count) {
+      document.getElementById('total-count').textContent = count;
+    }
+
+    // 검색 초기화
+    function resetSearch() {
+      document.getElementById('search-type').value = 'title';
+      document.getElementById('search-keyword').value = '';
+      currentPage = 1;
+      applyFilters();
+    }
+
+    // 행 선택
+    function toggleRow(id) {
+      if (selectedRows.includes(id)) {
+        selectedRows = selectedRows.filter(i => i !== id);
+      } else {
+        selectedRows.push(id);
+      }
+      updateSelectedCount();
+      applyFilters();
+    }
+
+    // 전체 선택
+    function toggleSelectAll() {
+      const filtered = getFilteredPopups();
+      const pagePopups = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+      const pageIds = pagePopups.map(p => p.id);
+      
+      const allSelected = pageIds.every(id => selectedRows.includes(id));
+      
+      if (allSelected) {
+        selectedRows = selectedRows.filter(id => !pageIds.includes(id));
+      } else {
+        selectedRows = [...new Set([...selectedRows, ...pageIds])];
+      }
+      
+      updateSelectedCount();
+      applyFilters();
+    }
+
+    // 전체 선택 체크박스 업데이트
+    function updateSelectAllCheckbox(pagePopups) {
+      const selectAll = document.getElementById('select-all');
+      const pageIds = pagePopups.map(p => p.id);
+      selectAll.checked = pagePopups.length > 0 && pageIds.every(id => selectedRows.includes(id));
+    }
+
+    // 선택 개수 업데이트
+    function updateSelectedCount() {
+      document.getElementById('selected-count').textContent = selectedRows.length;
+      const deleteBtn = document.getElementById('delete-btn');
+      
+      if (selectedRows.length > 0) {
+        deleteBtn.className = 'px-3 py-1.5 border rounded text-xs font-medium border-red-500 text-red-500 hover:bg-red-50';
+      } else {
+        deleteBtn.className = 'px-3 py-1.5 border rounded text-xs font-medium border-gray-300 text-gray-400';
+      }
+    }
+
+    // 필터링된 팝업 가져오기
+    function getFilteredPopups() {
+      const searchType = document.getElementById('search-type').value;
+      const keyword = document.getElementById('search-keyword').value.toLowerCase();
+      
+      return popups.filter(p => {
+        if (!keyword) return true;
+        
+        if (searchType === 'title') {
+          return p.title.toLowerCase().includes(keyword);
+        } else if (searchType === 'registrar') {
+          return p.registrar.toLowerCase().includes(keyword);
+        } else if (searchType === 'content') {
+          return p.content.toLowerCase().includes(keyword);
+        }
+        return true;
+      });
+    }
+
+    // 팝업 선택 (조회 모드)
+    function selectPopup(id) {
+      const popup = popups.find(p => p.id === id);
+      if (popup) {
+        openDetailPanel(popup, true); // 조회 모드로 오픈
+      }
+    }
+
+    // 상세 패널 열기
+    function openDetailPanel(popup, viewMode = false) {
+      isViewMode = viewMode;
+      const listPanel = document.getElementById('list-panel');
+      const detailPanel = document.getElementById('detail-panel');
+      
+      listPanel.className = 'w-[60%] bg-white flex flex-col h-full transition-all';
+      detailPanel.classList.remove('hidden');
+      
+      if (popup) {
+        currentPopup = { ...popup };
+        selectedFiles = [...popup.attachments];
+        
+        if (viewMode) {
+          // 조회 모드
+          document.getElementById('detail-title').textContent = '팝업 상세 정보';
+          document.getElementById('detail-subtitle').textContent = popup.title;
+          document.getElementById('detail-delete-btn').classList.add('hidden');
+          document.getElementById('detail-delete-placeholder').innerHTML = '';
+          document.getElementById('detail-save-btn').textContent = '목록';
+          document.getElementById('detail-save-btn').onclick = closeDetailPanel;
+          
+          // 기존 편집 버튼 제거 (중복 방지)
+          const existingEditBtn = document.getElementById('detail-edit-btn');
+          if (existingEditBtn) existingEditBtn.remove();
+          
+          // 편집 버튼 추가
+          const editBtn = document.createElement('button');
+          editBtn.id = 'detail-edit-btn';
+          editBtn.textContent = '수정';
+          editBtn.className = 'px-6 py-2 bg-green-500 text-white rounded text-sm font-medium hover:bg-green-600';
+          editBtn.onclick = function() { openDetailPanel(popup, false); };
+          document.getElementById('detail-save-btn').parentNode.insertBefore(editBtn, document.getElementById('detail-save-btn'));
+        } else {
+          // 수정 모드
+          document.getElementById('detail-title').textContent = '팝업 정보 수정';
+          document.getElementById('detail-subtitle').textContent = popup.title;
+          document.getElementById('detail-delete-btn').classList.remove('hidden');
+          document.getElementById('detail-delete-placeholder').innerHTML = '';
+          document.getElementById('detail-save-btn').textContent = '저장';
+          document.getElementById('detail-save-btn').onclick = savePopup;
+          
+          // 편집 버튼 제거
+          const existingEditBtn = document.getElementById('detail-edit-btn');
+          if (existingEditBtn) existingEditBtn.remove();
+        }
+        
+        // 폼 채우기
+        document.getElementById('detail-title-input').value = popup.title;
+        document.getElementById('detail-title-input').readOnly = viewMode;
+        document.getElementById('detail-registrar').value = popup.registrar;
+        document.getElementById('detail-date').value = popup.datetime;
+        document.getElementById('detail-start-date').value = popup.startDate;
+        document.getElementById('detail-start-date').disabled = viewMode;
+        document.getElementById('detail-end-date').value = popup.endDate;
+        document.getElementById('detail-end-date').disabled = viewMode;
+        document.getElementById('detail-content').value = popup.content;
+        document.getElementById('detail-content').readOnly = viewMode;
+        
+        // 파일 목록 표시
+        renderFileList();
+        
+        // 사이트 체크박스 선택
+        const checkboxes = document.querySelectorAll('#site-checkboxes input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+          cb.checked = popup.sites.includes(cb.value);
+          cb.disabled = viewMode;
+        });
+      } else {
+        // 신규 등록 모드
+        const today = new Date().toISOString().split('T')[0];
+        const datetime = new Date().toISOString().slice(0, 19).replace('T', ' ');
+        
+        currentPopup = { 
+          id: null,
+          title: '',
+          registrar: '관리자',
+          date: today,
+          datetime: datetime,
+          startDate: today,
+          endDate: '',
+          content: '',
+          attachments: [],
+          sites: [],
+          views: 0
+        };
+        selectedFiles = [];
+        
+        isViewMode = false;
+        document.getElementById('detail-title').textContent = '신규 팝업 등록';
+        document.getElementById('detail-subtitle').textContent = '';
+        document.getElementById('detail-delete-btn').classList.add('hidden');
+        document.getElementById('detail-delete-placeholder').innerHTML = '<div></div>';
+        document.getElementById('detail-save-btn').textContent = '등록';
+        document.getElementById('detail-save-btn').onclick = savePopup;
+        
+        // 편집 버튼 제거
+        const existingEditBtn = document.getElementById('detail-edit-btn');
+        if (existingEditBtn) existingEditBtn.remove();
+        
+        // 폼 초기화 및 활성화
+        document.getElementById('detail-title-input').value = '';
+        document.getElementById('detail-title-input').readOnly = false;
+        document.getElementById('detail-registrar').value = '관리자';
+        document.getElementById('detail-date').value = datetime;
+        document.getElementById('detail-start-date').value = today;
+        document.getElementById('detail-start-date').disabled = false;
+        document.getElementById('detail-end-date').value = '';
+        document.getElementById('detail-end-date').disabled = false;
+        document.getElementById('detail-content').value = '';
+        document.getElementById('detail-content').readOnly = false;
+        
+        renderFileList();
+        
+        // 사이트 체크박스 초기화 및 활성화
+        const checkboxes = document.querySelectorAll('#site-checkboxes input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+          cb.checked = false;
+          cb.disabled = false;
+        });
+      }
+    }
+
+    // 파일 목록 렌더링
+    function renderFileList() {
+      const fileList = document.getElementById('file-list');
+      const fileAddBtn = document.querySelector('#file-list').parentNode.querySelector('label');
+      
+      if (selectedFiles.length === 0) {
+        fileList.innerHTML = '<p class="text-sm text-gray-400">첨부된 파일이 없습니다</p>';
+      } else {
+        fileList.innerHTML = selectedFiles.map((file, index) => `
+          <div class="flex items-center justify-between bg-gray-50 rounded p-3 border border-gray-200">
+            <div class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 012 0v4a1 1 0 102 0V7a3 3 0 00-3-3z" clip-rule="evenodd" />
+              </svg>
+              <span class="text-sm text-gray-700">${file}</span>
+            </div>
+            ${!isViewMode ? `<button
+              onclick="removeFile(${index})"
+              class="px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded border border-red-200"
+            >
+              삭제
+            </button>` : ''}
+          </div>
+        `).join('');
+      }
+      
+      // 파일 추가 버튼 표시/숨김
+      if (fileAddBtn) {
+        fileAddBtn.style.display = isViewMode ? 'none' : 'block';
+      }
+    }
+
+    // 파일 제거
+    function removeFile(index) {
+      selectedFiles.splice(index, 1);
+      renderFileList();
+    }
+
+    // 파일 선택
+    function handleFileSelect(event) {
+      const files = Array.from(event.target.files);
+      files.forEach(file => {
+        selectedFiles.push(file.name);
+      });
+      renderFileList();
+      event.target.value = '';
+    }
+
+    // 상세 패널 닫기
+    function closeDetailPanel() {
+      const listPanel = document.getElementById('list-panel');
+      const detailPanel = document.getElementById('detail-panel');
+      
+      listPanel.className = 'w-full bg-white flex flex-col h-full transition-all';
+      detailPanel.classList.add('hidden');
+      
+      currentPopup = null;
+      selectedFiles = [];
+      applyFilters();
+    }
+
+    // 삭제 선택된 항목
+    function deleteSelected() {
+      if (selectedRows.length === 0) return;
+      
+      if (confirm(`선택한 ${selectedRows.length}개의 팝업을 삭제하시겠습니까?`)) {
+        selectedRows = [];
+        if (currentPopup && selectedRows.includes(currentPopup.id)) {
+          closeDetailPanel();
+        }
+        updateSelectedCount();
+        applyFilters();
+        alert('삭제되었습니다.');
+      }
+    }
+
+    // 현재 팝업 삭제
+    function deleteCurrentPopup() {
+      if (!currentPopup || !currentPopup.id) return;
+      
+      if (confirm('이 팝업을 삭제하시겠습니까?')) {
+        closeDetailPanel();
+        alert('삭제되었습니다.');
+      }
+    }
+
+    // 저장
+    function savePopup() {
+      const title = document.getElementById('detail-title-input').value;
+      const content = document.getElementById('detail-content').value;
+      const startDate = document.getElementById('detail-start-date').value;
+      const endDate = document.getElementById('detail-end-date').value;
+      
+      const checkboxes = document.querySelectorAll('#site-checkboxes input[type="checkbox"]:checked');
+      const selectedSites = Array.from(checkboxes).map(cb => cb.value);
+      
+      if (!title) {
+        alert('제목을 입력해주세요.');
+        return;
+      }
+      
+      if (!content) {
+        alert('내용을 입력해주세요.');
+        return;
+      }
+      
+      if (selectedSites.length === 0) {
+        alert('적용 사이트를 선택해주세요.');
+        return;
+      }
+      
+      if (currentPopup && currentPopup.id) {
+        alert('팝업이 수정되었습니다.');
+      } else {
+        alert('새 팝업이 등록되었습니다.');
+      }
+      
+      closeDetailPanel();
+    }
+
+    // 초기화 실행
+    init();
+  </script>
+</body>
+</html>
